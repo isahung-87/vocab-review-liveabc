@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary Review Game</title>
+    <!-- 引入 Tailwind CSS (樣式) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel (讓瀏覽器看得懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 自定義動畫樣式 -->
+    <style>
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+        }
+        .animate-bounce-short {
+            animation: bounce-short 0.6s;
+        }
+        @keyframes bounce-short {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+        }
+        .animate-shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        .animate-float-slow {
+            animation: float 8s ease-in-out infinite;
+        }
+        .animate-float-slower {
+            animation: float 12s ease-in-out infinite reverse;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-spin-slow {
+            animation: spin 4s linear infinite;
+        }
+        .animate-bounce-gentle {
+            animation: bounce-gentle 2s infinite;
+        }
+        @keyframes bounce-gentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 圖示元件 (使用 SVG 繪製，不依賴外部套件) ---
+        const Icon = ({ children, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                {children}
+            </svg>
+        );
+
+        const Play = (props) => <Icon {...props}><polygon points="5 3 19 12 5 21 5 3" /></Icon>;
+        const Check = (props) => <Icon {...props}><polyline points="20 6 9 17 4 12" /></Icon>;
+        const X = (props) => <Icon {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+        const Trophy = (props) => <Icon {...props}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></Icon>;
+        const RefreshCw = (props) => <Icon {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></Icon>;
+        const CircleIcon = (props) => <Icon {...props}><circle cx="12" cy="12" r="10" /></Icon>;
+        const XCircle = (props) => <Icon {...props}><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></Icon>;
+        const Heart = (props) => <Icon {...props}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></Icon>;
+        const StarIcon = (props) => <Icon {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></Icon>;
+        const Cloud = (props) => <Icon {...props}><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19" /><path d="M20 16.952c1.118 0 2.029-.908 2.029-2.028 0-1.12-.911-2.028-2.029-2.028-.124 0-.244.011-.36.032C19.33 11.234 17.792 10 16 10c-1.792 0-3.33 1.234-3.64 2.928-.116-.021-.236-.032-.36-.032-1.118 0-2.029.908-2.029 2.028 0 1.12.911 2.028 2.029 2.028" /></Icon>;
+        const Sparkles = (props) => <Icon {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 5H2" /><path d="M5 16.9v4" /><path d="M9 19H2" /></Icon>;
+        const ArrowLeft = (props) => <Icon {...props}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></Icon>;
+        const BookOpen = (props) => <Icon {...props}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></Icon>;
+
+        // --- 單字資料庫 ---
+        const UNIT_DATA = [
+          {
+            id: 1,
+            title: "Unit 1",
+            color: "from-pink-400 to-rose-400",
+            vocab: [
+              { id: 101, en: "anxious", zh: "緊張不安的、焦慮的" },
+              { id: 102, en: "playful", zh: "活潑的、愛玩的" },
+              { id: 103, en: "tease", zh: "逗弄、取笑" },
+              { id: 104, en: "communicate", zh: "溝通、交流" },
+              { id: 105, en: "facial", zh: "臉部的" },
+              { id: 106, en: "license", zh: "執照、許可證" },
+              { id: 107, en: "comfort", zh: "安慰、舒適" },
+              { id: 108, en: "disappointment", zh: "失望" },
+              { id: 109, en: "reduce", zh: "減少、降低" },
+              { id: 110, en: "represent", zh: "代表、象徵" }
+            ]
+          },
+          {
+            id: 2,
+            title: "Unit 2",
+            color: "from-blue-400 to-cyan-400",
+            vocab: [
+              { id: 201, en: "stadium", zh: "體育場" },
+              { id: 202, en: "concert", zh: "演唱會、音樂會" },
+              { id: 203, en: "invention", zh: "發明物；發明、創造" },
+              { id: 204, en: "device", zh: "裝置、設備、器具" },
+              { id: 205, en: "launch", zh: "發射；發起、推出" },
+              { id: 206, en: "competition", zh: "比賽、競賽" },
+              { id: 207, en: "creative", zh: "有創意的；有創造力的" },
+              { id: 208, en: "insult", zh: "侮辱、辱罵" },
+              { id: 209, en: "oppose", zh: "使對立；與……競爭" },
+              { id: 210, en: "colorful", zh: "色彩繽紛的；豐富多彩的" }
+            ]
+          },
+          {
+            id: 6,
+            title: "Unit 6",
+            color: "from-teal-400 to-emerald-400",
+            vocab: [
+              { id: 601, en: "transform", zh: "使轉變、轉換；改造" },
+              { id: 602, en: "criticize", zh: "批評" },
+              { id: 603, en: "criminal", zh: "犯罪的、不道德的；罪犯" },
+              { id: 604, en: "annoy", zh: "惹惱、使生氣" },
+              { id: 605, en: "permission", zh: "許可、允許" },
+              { id: 606, en: "spoil", zh: "弄糟、破壞；寵壞" },
+              { id: 607, en: "plenty", zh: "豐富、充足" },
+              { id: 608, en: "generation", zh: "世代；一代" },
+              { id: 609, en: "tourist", zh: "遊客、觀光客" },
+              { id: 610, en: "attraction", zh: "景點；具吸引力的事物" }
+            ]
+          },
+          {
+            id: 13,
+            title: "Unit 5 & 13",
+            color: "from-orange-400 to-red-400",
+            vocab: [
+              { id: 1301, en: "counter", zh: "櫃檯" },
+              { id: 1302, en: "crispy", zh: "酥脆的" },
+              { id: 1303, en: "pickle", zh: "酸黃瓜；醃菜" },
+              { id: 1304, en: "sauce", zh: "醬汁" },
+              { id: 1305, en: "request", zh: "請求、要求" },
+              { id: 1306, en: "onion", zh: "洋蔥" },
+              { id: 1307, en: "absolutely", zh: "當然、肯定；絕對地、極其" },
+              { id: 1308, en: "discount", zh: "折扣" },
+              { id: 1309, en: "merry", zh: "歡樂的、愉快的" },
+              { id: 1310, en: "casual", zh: "休閒的、非正式的；隨意的" },
+              { id: 1311, en: "exchange", zh: "交換；交流" },
+              { id: 1312, en: "site", zh: "網站；地點、場所" }
+            ]
+          }
+        ];
+
+        // --- 工具函數 ---
+        const shuffle = (array) => {
+          const newArray = [...array];
+          for (let i = newArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+          }
+          return newArray;
+        };
+
+        // --- 主程式元件 ---
+        function App() {
+          // --- 狀態 ---
+          const [selectedUnit, setSelectedUnit] = useState(null);
+          const [board, setBoard] = useState([]);
+          const [currentPlayer, setCurrentPlayer] = useState('O');
+          const [gameState, setGameState] = useState('idle');
+          const [winner, setWinner] = useState(null);
+          
+          // 答題模態框狀態
+          const [activeCellIndex, setActiveCellIndex] = useState(null);
+          const [quizOptions, setQuizOptions] = useState([]);
+          const [showModal, setShowModal] = useState(false);
+          const [feedback, setFeedback] = useState(null);
+
+          // --- 遊戲邏輯 ---
+
+          // 回到單元選擇
+          const handleBackToMenu = () => {
+            setGameState('idle');
+            setSelectedUnit(null);
+            setBoard([]);
+          };
+
+          // 選擇單元
+          const handleSelectUnit = (unit) => {
+            setSelectedUnit(unit);
+            setGameState('idle');
+          };
+
+          // 初始化遊戲
+          const startNewGame = () => {
+            if (!selectedUnit) return;
+
+            let sourceVocab = [...selectedUnit.vocab];
+            while (sourceVocab.length < 9) {
+              sourceVocab = [...sourceVocab, ...sourceVocab];
+            }
+
+            const selectedVocabs = shuffle(sourceVocab).slice(0, 9);
+            const newBoard = selectedVocabs.map(v => ({ vocab: v, owner: null }));
+            
+            setBoard(newBoard);
+            setCurrentPlayer('O');
+            setGameState('playing');
+            setWinner(null);
+            setActiveCellIndex(null);
+            setShowModal(false);
+            setFeedback(null);
+          };
+
+          // 檢查勝利條件
+          useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const lines = [
+              [0, 1, 2], [3, 4, 5], [6, 7, 8],
+              [0, 3, 6], [1, 4, 7], [2, 5, 8],
+              [0, 4, 8], [2, 4, 6]
+            ];
+
+            for (const line of lines) {
+              const [a, b, c] = line;
+              if (
+                board[a]?.owner &&
+                board[a].owner === board[b].owner &&
+                board[a].owner === board[c].owner
+              ) {
+                setWinner(board[a].owner);
+                setGameState('won');
+                return;
+              }
+            }
+
+            if (board.every(cell => cell.owner !== null)) {
+              setGameState('draw');
+            }
+          }, [board, gameState]);
+
+          // 點擊格子
+          const handleCellClick = (index) => {
+            if (gameState !== 'playing' || board[index].owner !== null || !selectedUnit) return;
+
+            const targetVocab = board[index].vocab;
+            const otherVocabs = selectedUnit.vocab.filter(v => v.id !== targetVocab.id);
+            const distractors = shuffle(otherVocabs).slice(0, 2);
+            
+            while (distractors.length < 2) {
+              distractors.push({ id: 999, en: "Dummy", zh: "錯誤選項" });
+            }
+
+            const options = shuffle([targetVocab, ...distractors]);
+
+            setActiveCellIndex(index);
+            setQuizOptions(options);
+            setShowModal(true);
+            setFeedback(null);
+          };
+
+          // 處理答題
+          const handleAnswer = (selectedVocabId) => {
+            if (activeCellIndex === null) return;
+
+            const currentCell = board[activeCellIndex];
+            const isCorrect = selectedVocabId === currentCell.vocab.id;
+
+            if (isCorrect) {
+              setFeedback('correct');
+              setTimeout(() => {
+                const newBoard = [...board];
+                newBoard[activeCellIndex].owner = currentPlayer;
+                setBoard(newBoard);
+                setCurrentPlayer(prev => prev === 'O' ? 'X' : 'O');
+                setShowModal(false);
+              }, 600);
+            } else {
+              setFeedback('wrong');
+              setTimeout(() => {
+                setCurrentPlayer(prev => prev === 'O' ? 'X' : 'O');
+                setShowModal(false);
+              }, 1000);
+            }
+          };
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-50 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+              
+              {/* 背景裝飾 */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <Cloud className="absolute top-10 left-[-20px] text-pink-200 w-32 h-32 opacity-60 animate-float-slow" fill="#fbcfe8" />
+                <Cloud className="absolute bottom-10 right-[-20px] text-blue-200 w-40 h-40 opacity-60 animate-float-slower" fill="#bae6fd" />
+                <StarIcon className="absolute top-1/4 left-10 text-yellow-300 w-8 h-8 animate-spin-slow" fill="#fde047" />
+                <StarIcon className="absolute top-1/3 right-10 text-yellow-200 w-6 h-6 animate-pulse" fill="#fef08a" />
+                <Heart className="absolute bottom-1/3 left-1/4 text-pink-300 w-8 h-8 animate-bounce-gentle" fill="#f9a8d4" />
+                <Sparkles className="absolute top-20 right-1/3 text-yellow-400 w-10 h-10 animate-pulse" />
+              </div>
+
+              {/* --- 標題 --- */}
+              <div className="text-center mb-6 z-10 relative">
+                <h1 className="text-4xl font-black text-slate-800 mb-2 flex items-center justify-center gap-3 drop-shadow-sm tracking-tight cursor-pointer" onClick={handleBackToMenu}>
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-indigo-500">
+                    Tic-Tac-Toe
+                  </span>
+                  <span className="text-yellow-400">Battle</span>
+                </h1>
+                {selectedUnit ? (
+                   <div className="inline-block bg-white/60 backdrop-blur-sm px-6 py-2 rounded-full border-2 border-pink-200 shadow-sm animate-fade-in">
+                     <p className="text-pink-500 font-bold text-lg tracking-wide flex items-center gap-2">
+                       <StarIcon className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                       Vocabulary Review - {selectedUnit.title}
+                       <StarIcon className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                     </p>
+                  </div>
+                ) : (
+                  <div className="inline-block bg-white/60 backdrop-blur-sm px-6 py-2 rounded-full border-2 border-blue-200 shadow-sm">
+                     <p className="text-blue-500 font-bold text-lg tracking-wide">
+                       Choose a Unit to Start!
+                     </p>
+                  </div>
+                )}
+              </div>
+
+              {/* --- 畫面切換邏輯 --- */}
+
+              {!selectedUnit && (
+                <div className="max-w-4xl w-full z-10 animate-fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+                    {UNIT_DATA.map((unit) => (
+                      <button
+                        key={unit.id}
+                        onClick={() => handleSelectUnit(unit)}
+                        className={`
+                          group relative overflow-hidden bg-white hover:bg-slate-50 rounded-3xl p-6 
+                          shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2
+                          border-4 border-white ring-4 ring-slate-100 hover:ring-pink-200
+                        `}
+                      >
+                        <div className={`absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${unit.color}`}></div>
+                        <div className="flex flex-col items-center">
+                          <div className={`
+                            w-16 h-16 rounded-full mb-4 flex items-center justify-center 
+                            bg-gradient-to-br ${unit.color} text-white shadow-md
+                            group-hover:scale-110 transition-transform duration-300
+                          `}>
+                            <BookOpen className="w-8 h-8" />
+                          </div>
+                          <h3 className="text-2xl font-black text-slate-700 mb-2">{unit.title}</h3>
+                          <p className="text-slate-400 font-bold text-sm bg-slate-100 px-3 py-1 rounded-full">
+                            {unit.vocab.length} Words
+                          </p>
+                        </div>
+                        <Sparkles className="absolute bottom-4 right-4 text-yellow-400 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUnit && (
+                <>
+                  <button 
+                    onClick={handleBackToMenu}
+                    className="absolute top-4 left-4 z-20 bg-white/80 p-2 rounded-full shadow-md hover:bg-white text-slate-500 hover:text-pink-500 transition-colors"
+                    title="Back to Units"
+                  >
+                    <ArrowLeft className="w-6 h-6" />
+                  </button>
+
+                  {gameState === 'idle' ? (
+                    <div className="bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-xl text-center max-w-sm w-full z-10 border-4 border-white ring-4 ring-pink-100 animate-fade-in">
+                      <div className="flex justify-center gap-6 mb-6">
+                        <div className="p-4 bg-blue-100 rounded-full shadow-inner transform -rotate-6"><CircleIcon className="w-10 h-10 text-blue-500" strokeWidth={3} /></div>
+                        <div className="p-4 bg-pink-100 rounded-full shadow-inner transform rotate-6"><X className="w-10 h-10 text-pink-500" strokeWidth={3} /></div>
+                      </div>
+                      <h2 className="text-2xl font-bold text-slate-700 mb-4 tracking-tight">雙人對戰: {selectedUnit.title}</h2>
+                      <div className="text-slate-600 mb-8 text-sm text-left bg-gradient-to-br from-white to-pink-50 p-5 rounded-2xl border border-pink-100 shadow-sm">
+                        <p className="mb-2 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center font-bold text-xs">1</span> 兩人輪流選一個單字</p>
+                        <p className="mb-2 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center font-bold text-xs">2</span> 答對中文，該格畫 O 或 X</p>
+                        <p className="mb-2 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-red-100 text-red-500 flex items-center justify-center font-bold text-xs">!</span> <span className="text-red-400 font-bold">答錯會換對方回合！</span></p>
+                        <p className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center font-bold text-xs">3</span> 最先連成一條線者獲勝</p>
+                      </div>
+                      <button 
+                        onClick={startNewGame}
+                        className={`
+                          w-full bg-gradient-to-r ${selectedUnit.color} text-white font-bold py-4 px-6 rounded-2xl 
+                          transition-all shadow-lg transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 text-lg 
+                          border-b-4 border-black/20
+                        `}
+                      >
+                        <Play className="w-6 h-6 fill-white" /> 開始對戰 (Start)
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="max-w-xl w-full z-10 animate-fade-in">
+                      
+                      <div className="flex justify-between items-center mb-6 px-2">
+                        <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all border-2 ${currentPlayer === 'O' ? 'bg-blue-100 border-blue-300 shadow-lg scale-105 transform -rotate-2' : 'bg-white/60 border-transparent text-slate-400'}`}>
+                          <div className={`p-1 rounded-full ${currentPlayer === 'O' ? 'bg-blue-500 text-white' : 'bg-slate-200'}`}>
+                            <CircleIcon className="w-5 h-5" />
+                          </div>
+                          <span className={`font-bold ${currentPlayer === 'O' ? 'text-blue-600' : ''}`}>Player 1</span>
+                        </div>
+                        
+                        <div className="text-pink-300 font-black text-xl animate-pulse">VS</div>
+                        
+                        <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all border-2 ${currentPlayer === 'X' ? 'bg-pink-100 border-pink-300 shadow-lg scale-105 transform rotate-2' : 'bg-white/60 border-transparent text-slate-400'}`}>
+                           <span className={`font-bold ${currentPlayer === 'X' ? 'text-pink-600' : ''}`}>Player 2</span>
+                           <div className={`p-1 rounded-full ${currentPlayer === 'X' ? 'bg-pink-500 text-white' : 'bg-slate-200'}`}>
+                            <X className="w-5 h-5" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/70 backdrop-blur-sm p-4 rounded-3xl shadow-xl border-4 border-white">
+                        <div className="grid grid-cols-3 gap-3">
+                          {board.map((cell, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handleCellClick(index)}
+                              disabled={cell.owner !== null || gameState !== 'playing'}
+                              className={`
+                                aspect-square rounded-2xl flex flex-col items-center justify-center p-1 relative
+                                transition-all duration-300 shadow-sm
+                                ${cell.owner === null 
+                                  ? 'bg-white hover:bg-yellow-50 active:scale-95 cursor-pointer border-2 border-slate-100 hover:border-yellow-200' 
+                                  : cell.owner === 'O' ? 'bg-blue-50 border-4 border-blue-200' : 'bg-pink-50 border-4 border-pink-200'}
+                              `}
+                            >
+                              {cell.owner ? (
+                                cell.owner === 'O' ? 
+                                  <CircleIcon className="w-16 h-16 text-blue-400 animate-bounce-short drop-shadow-sm" strokeWidth={3} /> : 
+                                  <X className="w-16 h-16 text-pink-400 animate-bounce-short drop-shadow-sm" strokeWidth={3} />
+                              ) : (
+                                <span className="text-slate-600 font-bold text-base md:text-xl break-words px-2 leading-tight">
+                                  {cell.vocab.en}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-8 flex justify-center gap-4">
+                        <button 
+                          onClick={startNewGame}
+                          className="bg-white/50 hover:bg-white text-slate-500 hover:text-pink-500 px-6 py-2 rounded-full font-bold transition-all flex items-center gap-2 shadow-sm border border-slate-100 hover:border-pink-200"
+                        >
+                          <RefreshCw className="w-4 h-4" /> 重新開始 (Reset Game)
+                        </button>
+                        <button 
+                          onClick={handleBackToMenu}
+                          className="bg-white/50 hover:bg-white text-slate-500 hover:text-blue-500 px-6 py-2 rounded-full font-bold transition-all flex items-center gap-2 shadow-sm border border-slate-100 hover:border-blue-200"
+                        >
+                          <BookOpen className="w-4 h-4" /> 更換單元 (Change Unit)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {showModal && activeCellIndex !== null && selectedUnit && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-800/40 backdrop-blur-sm p-4 animate-fade-in">
+                  <div className={`
+                    bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform transition-all border-4 border-white relative overflow-hidden
+                    ${feedback === 'wrong' ? 'animate-shake' : ''}
+                  `}>
+                    <div className={`absolute -top-10 -left-10 w-32 h-32 bg-gradient-to-br ${selectedUnit.color} rounded-full opacity-20 blur-xl`}></div>
+                    <div className={`absolute -bottom-10 -right-10 w-32 h-32 bg-gradient-to-tl ${selectedUnit.color} rounded-full opacity-20 blur-xl`}></div>
+
+                    <div className="text-center mb-6 relative z-10">
+                      <span className="inline-block px-3 py-1 bg-slate-100 text-slate-400 rounded-full text-xs font-bold uppercase tracking-widest mb-2 border border-slate-200">
+                        Quiz Time
+                      </span>
+                      <h3 className="text-3xl font-black text-slate-800 mt-1 tracking-tight">
+                        {board[activeCellIndex].vocab.en}
+                      </h3>
+                    </div>
+                    
+                    <div className="space-y-3 relative z-10">
+                      {quizOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => !feedback && handleAnswer(option.id)}
+                          className={`
+                            w-full p-4 rounded-2xl text-left font-bold text-lg transition-all border-2 shadow-sm
+                            ${feedback === 'correct' && option.id === board[activeCellIndex].vocab.id 
+                              ? 'bg-green-100 border-green-400 text-green-700' 
+                              : feedback === 'wrong' && option.id === board[activeCellIndex].vocab.id 
+                                ? 'bg-green-50 border-green-200 text-green-700 opacity-60' 
+                                : 'bg-white border-slate-100 hover:border-pink-300 hover:bg-pink-50 text-slate-600'}
+                          `}
+                        >
+                          {option.zh}
+                        </button>
+                      ))}
+                    </div>
+
+                    {feedback === 'wrong' && (
+                      <div className="mt-4 text-center text-red-500 font-bold flex items-center justify-center gap-2 animate-bounce">
+                        <XCircle className="w-6 h-6" />
+                        <span>哎呀！換對方回合</span>
+                      </div>
+                    )}
+                    {feedback === 'correct' && (
+                      <div className="mt-4 text-center text-green-500 font-bold flex items-center justify-center gap-2 animate-bounce">
+                        <Check className="w-6 h-6" />
+                        <span>Bingo! 正確!</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {(gameState === 'won' || gameState === 'draw') && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-md animate-fade-in">
+                  <div className="text-center p-10 bg-white rounded-3xl shadow-2xl border-4 border-yellow-100 max-w-sm mx-4 relative overflow-hidden">
+                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-300 via-yellow-300 to-blue-300"></div>
+
+                    {gameState === 'won' ? (
+                      <>
+                        <div className="relative">
+                          <Trophy className="w-28 h-28 mx-auto text-yellow-400 mb-4 animate-bounce fill-yellow-100 stroke-[1.5]" />
+                          <Sparkles className="absolute top-0 right-10 text-yellow-500 w-8 h-8 animate-spin-slow" />
+                          <Sparkles className="absolute bottom-0 left-10 text-yellow-500 w-6 h-6 animate-pulse" />
+                        </div>
+                        <h2 className="text-4xl font-black text-slate-800 mb-2 tracking-tight">
+                          {winner === 'O' ? <span className="text-blue-500">Player 1</span> : <span className="text-pink-500">Player 2</span>} Wins!
+                        </h2>
+                        <p className="text-slate-400 font-bold mb-8">太厲害了！恭喜獲勝！</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-center gap-6 mb-6">
+                           <div className="bg-slate-100 p-3 rounded-full"><CircleIcon className="w-12 h-12 text-slate-400" /></div>
+                           <div className="bg-slate-100 p-3 rounded-full"><X className="w-12 h-12 text-slate-400" /></div>
+                        </div>
+                        <h2 className="text-3xl font-black text-slate-700 mb-2">平手! Draw!</h2>
+                        <p className="text-slate-400 mb-8 font-bold">勢均力敵的好比賽</p>
+                      </>
+                    )}
+                    
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={startNewGame}
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 px-10 rounded-2xl shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-2 mx-auto text-lg border-b-4 border-indigo-700 w-full"
+                      >
+                        <RefreshCw className="w-5 h-5" /> 重新開始 (Reset Game)
+                      </button>
+                      <button 
+                        onClick={handleBackToMenu}
+                        className="bg-white hover:bg-slate-50 text-slate-500 px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 w-full border-2 border-slate-100"
+                      >
+                        <BookOpen className="w-4 h-4" /> 更換單元 (Change Unit)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
